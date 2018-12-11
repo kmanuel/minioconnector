@@ -9,15 +9,16 @@ import (
 	"os"
 )
 
-const minioHost = "localhost:9000"
 const useSsl = false
 
+var minioHost string
 var accessKey string
 var secretKey string
 var bucketName string
 
 func Init() {
 	godotenv.Load()
+	minioHost = os.Getenv("MINIO_HOST")
 	accessKey = os.Getenv("MINIO_ACCESS_KEY")
 	secretKey = os.Getenv("MINIO_SECRET_KEY")
 	bucketName = os.Getenv("BUCKET_NAME")
