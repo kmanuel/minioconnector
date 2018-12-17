@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go"
-	"log"
+	log "github.com/sirupsen/logrus"
 )
 
 const useSsl = false
@@ -49,7 +49,7 @@ func DownloadFile(objectName string) string {
 	return outputFilePath
 }
 
-func UploadFile(filePath string) {
+func UploadFile(filePath string) string {
 	client, err := minio.New(
 		minioHost,
 		accessKey,
@@ -70,9 +70,9 @@ func UploadFile(filePath string) {
 
 	if !bucketExists {
 		createBucket(err, client, bucketName)
-		log.Printf("successfully created bucket asiatrip")
+		log.WithField("bucketname", bucketName).Info("successfully created bucket")
 	} else {
-		log.Printf("bucket already exists")
+		log.WithField("bucketname", bucketName).Debug("bucket already exists")
 	}
 
 	objectName := uuid.New().String()
@@ -83,12 +83,14 @@ func UploadFile(filePath string) {
 		log.Fatalln(err)
 	}
 
-	log.Printf("Successfully uploaded %s of size %d\n", objectName, n)
+	log.WithField("objectName", objectName).Info("Successfully uploaded %s of size %d\n", objectName, n)
+
+	return objectName
 }
 
 func createBucket(err error, client *minio.Client, bucketName string) {
 	err = client.MakeBucket(bucketName, "us-east-1")
 	if err != nil {
-		log.Fatalln("couldn't create bucket")
+		log.WithField("bucketName", bucketName).Fatalln("couldn't create bucket")
 	}
 }
