@@ -49,6 +49,25 @@ func DownloadFile(objectName string) string {
 	return outputFilePath
 }
 
+func GetObject(objectName string) *minio.Object {
+	client, err := minio.New(
+		minioHost,
+		accessKey,
+		secretKey,
+		useSsl)
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	object, e := client.GetObject(bucketName, objectName, minio.GetObjectOptions{})
+	if e != nil {
+		panic(e)
+	}
+
+	return object
+}
+
 func UploadFile(filePath string) string {
 	fileName := uuid.New().String()
 	return UploadFileWithName(filePath, fileName)
