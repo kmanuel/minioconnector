@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go"
 	log "github.com/sirupsen/logrus"
+	"io"
 )
 
 const useSsl = false
@@ -50,15 +51,7 @@ func DownloadFile(objectName string) string {
 }
 
 func GetObject(objectName string) *minio.Object {
-	client, err := minio.New(
-		minioHost,
-		accessKey,
-		secretKey,
-		useSsl)
-
-	if err != nil {
-		log.Fatalln(err)
-	}
+	client := getClient()
 
 	object, e := client.GetObject(bucketName, objectName, minio.GetObjectOptions{})
 	if e != nil {
@@ -68,21 +61,21 @@ func GetObject(objectName string) *minio.Object {
 	return object
 }
 
+func UploadFileStream(reader io.Reader, uploadName string) {
+	client := getClient()
+	_, err := client.PutObject(bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	if err != nil {
+		panic(err)
+	}
+}
+
 func UploadFile(filePath string) string {
 	fileName := uuid.New().String()
 	return UploadFileWithName(filePath, fileName)
 }
 
 func UploadFileWithName(filePath string, uploadName string) string {
-	client, err := minio.New(
-		minioHost,
-		accessKey,
-		secretKey,
-		useSsl)
-
-	if err != nil {
-		log.Fatalln(err)
-	}
+	client := getClient()
 
 	log.Printf("%#v\n", client)
 
@@ -109,6 +102,18 @@ func UploadFileWithName(filePath string, uploadName string) string {
 	log.WithField("uploadName", uploadName).Info("Successfully uploaded %s of size %d\n", uploadName, n)
 
 	return uploadName
+}
+
+func getClient() *minio.Client {
+	client, err := minio.New(
+		minioHost,
+		accessKey,
+		secretKey,
+		useSsl)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return client
 }
 
 func createBucket(err error, client *minio.Client, bucketName string) {
