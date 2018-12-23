@@ -50,6 +50,11 @@ func DownloadFile(objectName string) string {
 }
 
 func UploadFile(filePath string) string {
+	fileName := uuid.New().String()
+	return UploadFileWithName(filePath, fileName)
+}
+
+func UploadFileWithName(filePath string, uploadName string) string {
 	client, err := minio.New(
 		minioHost,
 		accessKey,
@@ -75,17 +80,16 @@ func UploadFile(filePath string) string {
 		log.WithField("bucketname", bucketName).Debug("bucket already exists")
 	}
 
-	objectName := uuid.New().String()
 	contentType := "img/jpeg"
 
-	n, err := client.FPutObject(bucketName, objectName, filePath, minio.PutObjectOptions{ContentType: contentType})
+	n, err := client.FPutObject(bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	log.WithField("objectName", objectName).Info("Successfully uploaded %s of size %d\n", objectName, n)
+	log.WithField("uploadName", uploadName).Info("Successfully uploaded %s of size %d\n", uploadName, n)
 
-	return objectName
+	return uploadName
 }
 
 func createBucket(err error, client *minio.Client, bucketName string) {
