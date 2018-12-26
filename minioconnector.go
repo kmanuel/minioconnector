@@ -1,14 +1,13 @@
 package minioconnector
 
 import (
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go"
 	log "github.com/sirupsen/logrus"
 	"io"
 )
 
-const useSsl = false
+const NO_SSL = false
 
 var minioHost string
 var accessKey string
@@ -25,100 +24,107 @@ func Init(
 	accessKey = accessKeyArg
 	secretKey = secretKeyArg
 	bucketName = bucketNameArg
-
 }
 
-func DownloadFile(objectName string) string {
+func DownloadFile(objectName string) (string, error) {
 	outputFilePath := "/tmp/downloaded" + uuid.New().String() + ".jpg"
 
 	client, err := minio.New(
 		minioHost,
 		accessKey,
 		secretKey,
-		useSsl)
-
+		NO_SSL)
 	if err != nil {
-		log.Fatalln(err)
+		return "", err
 	}
 
 	err = client.FGetObject(bucketName, objectName, outputFilePath, minio.GetObjectOptions{})
 
 	if err != nil {
-		fmt.Println(err)
+		return "", err
 	}
 
-	return outputFilePath
+	return outputFilePath, nil
 }
 
-func GetObject(objectName string) *minio.Object {
-	client := getClient()
-
-	object, e := client.GetObject(bucketName, objectName, minio.GetObjectOptions{})
-	if e != nil {
-		panic(e)
-	}
-
-	return object
-}
-
-func UploadFileStream(reader io.Reader, uploadName string) {
-	client := getClient()
-	_, err := client.PutObject(bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
+func GetObject(objectName string) (*minio.Object, error) {
+	client, err := getClient()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
+
+	object, err := client.GetObject(bucketName, objectName, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return object, nil
 }
 
-func UploadFile(filePath string) string {
+func UploadFileStream(reader io.Reader, uploadName string) error {
+	client, err := getClient()
+	if err != nil {
+		return err
+	}
+	_, err = client.PutObject(bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	return err
+}
+
+func UploadFile(filePath string) (string, error) {
 	fileName := uuid.New().String()
 	return UploadFileWithName(filePath, fileName)
 }
 
-func UploadFileWithName(filePath string, uploadName string) string {
-	client := getClient()
+func UploadFileWithName(filePath string, uploadName string) (string, error) {
+	client, err := getClient()
+	if err != nil {
+		return "", err
+	}
 
 	log.Printf("%#v\n", client)
 
-	bucketExists, err := client.BucketExists(bucketName)
-
+	err = createBucketIfNotExists(client)
 	if err != nil {
-		log.Fatalln(err)
+		return "", nil
+	}
+
+	n, err := client.FPutObject(bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	if err != nil {
+		return "", err
+	}
+
+	log.WithField("uploadName", uploadName).Info("Successfully uploaded %s of size %d\n", uploadName, n)
+
+	return uploadName, nil
+}
+
+func createBucketIfNotExists(client *minio.Client) error {
+	bucketExists, err := client.BucketExists(bucketName)
+	if err != nil {
+		return err
 	}
 
 	if !bucketExists {
-		createBucket(err, client, bucketName)
+		err := createBucket(client, bucketName)
+		if err != nil {
+			return err
+		}
 		log.WithField("bucketname", bucketName).Info("successfully created bucket")
 	} else {
 		log.WithField("bucketname", bucketName).Debug("bucket already exists")
 	}
 
-	contentType := "img/jpeg"
-
-	n, err := client.FPutObject(bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: contentType})
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	log.WithField("uploadName", uploadName).Info("Successfully uploaded %s of size %d\n", uploadName, n)
-
-	return uploadName
+	return nil
 }
 
-func getClient() *minio.Client {
-	client, err := minio.New(
+func createBucket(client *minio.Client, bucketName string) error {
+	return client.MakeBucket(bucketName, "us-east-1")
+}
+
+func getClient() (*minio.Client, error) {
+	return minio.New(
 		minioHost,
 		accessKey,
 		secretKey,
-		useSsl)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	return client
-}
-
-func createBucket(err error, client *minio.Client, bucketName string) {
-	err = client.MakeBucket(bucketName, "us-east-1")
-	if err != nil {
-		log.WithField("bucketName", bucketName).Fatalln("couldn't create bucket")
-	}
+		NO_SSL)
 }
