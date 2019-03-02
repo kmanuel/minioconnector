@@ -38,6 +38,11 @@ func DownloadFile(objectName string) (string, error) {
 		return "", err
 	}
 
+	err = createBucketIfNotExists(client)
+	if err != nil {
+		return "", err
+	}
+
 	err = client.FGetObject(bucketName, objectName, outputFilePath, minio.GetObjectOptions{})
 
 	if err != nil {
@@ -49,6 +54,11 @@ func DownloadFile(objectName string) (string, error) {
 
 func GetObject(objectName string) (*minio.Object, error) {
 	client, err := getClient()
+	if err != nil {
+		return nil, err
+	}
+
+	err = createBucketIfNotExists(client)
 	if err != nil {
 		return nil, err
 	}
@@ -66,6 +76,12 @@ func UploadFileStream(reader io.Reader, uploadName string) error {
 	if err != nil {
 		return err
 	}
+
+	err = createBucketIfNotExists(client)
+	if err != nil {
+		return err
+	}
+
 	_, err = client.PutObject(bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
 	return err
 }
@@ -80,8 +96,6 @@ func UploadFileWithName(filePath string, uploadName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	log.Printf("%#v\n", client)
 
 	err = createBucketIfNotExists(client)
 	if err != nil {
@@ -110,8 +124,6 @@ func createBucketIfNotExists(client *minio.Client) error {
 			return err
 		}
 		log.WithField("bucketname", bucketName).Info("successfully created bucket")
-	} else {
-		log.WithField("bucketname", bucketName).Debug("bucket already exists")
 	}
 
 	return nil
