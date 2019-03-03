@@ -9,41 +9,55 @@ import (
 
 const NO_SSL = false
 
-var minioHost string
-var accessKey string
-var secretKey string
-var bucketName string
+type MinioService interface {
+	DownloadFile(objectName string) (string, error)
+	GetObject(objectName string) (*minio.Object, error)
+	UploadFileStream(reader io.Reader, uploadName string) error
+	UploadFile(filePath string) (string, error)
+	UploadFileWithName(filePath string, uploadName string) (string, error)
+}
 
-func Init(
+type minioServiceImpl struct {
+	minioHost  string
+	accessKey  string
+	secretKey  string
+	bucketName string
+}
+
+func NewMinioService(
 	minioHostArg string,
 	accessKeyArg string,
 	secretKeyArg string,
-	bucketNameArg string) {
+	bucketNameArg string) *MinioService {
 
-	minioHost = minioHostArg
-	accessKey = accessKeyArg
-	secretKey = secretKeyArg
-	bucketName = bucketNameArg
+	var service MinioService
+	service = minioServiceImpl{
+		minioHost:  minioHostArg,
+		accessKey:  accessKeyArg,
+		secretKey:  secretKeyArg,
+		bucketName: bucketNameArg,
+	}
+	return &service
 }
 
-func DownloadFile(objectName string) (string, error) {
+func (m minioServiceImpl) DownloadFile(objectName string) (string, error) {
 	outputFilePath := "/tmp/downloaded" + uuid.New().String() + ".jpg"
 
 	client, err := minio.New(
-		minioHost,
-		accessKey,
-		secretKey,
+		m.minioHost,
+		m.accessKey,
+		m.secretKey,
 		NO_SSL)
 	if err != nil {
 		return "", err
 	}
 
-	err = createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(client)
 	if err != nil {
 		return "", err
 	}
 
-	err = client.FGetObject(bucketName, objectName, outputFilePath, minio.GetObjectOptions{})
+	err = client.FGetObject(m.bucketName, objectName, outputFilePath, minio.GetObjectOptions{})
 
 	if err != nil {
 		return "", err
@@ -52,18 +66,18 @@ func DownloadFile(objectName string) (string, error) {
 	return outputFilePath, nil
 }
 
-func GetObject(objectName string) (*minio.Object, error) {
-	client, err := getClient()
+func (m minioServiceImpl) GetObject(objectName string) (*minio.Object, error) {
+	client, err := m.getClient()
 	if err != nil {
 		return nil, err
 	}
 
-	err = createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(client)
 	if err != nil {
 		return nil, err
 	}
 
-	object, err := client.GetObject(bucketName, objectName, minio.GetObjectOptions{})
+	object, err := client.GetObject(m.bucketName, objectName, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -71,38 +85,38 @@ func GetObject(objectName string) (*minio.Object, error) {
 	return object, nil
 }
 
-func UploadFileStream(reader io.Reader, uploadName string) error {
-	client, err := getClient()
+func (m minioServiceImpl) UploadFile(filePath string) (string, error) {
+	fileName := uuid.New().String()
+	return m.UploadFileWithName(filePath, fileName)
+}
+
+func (m minioServiceImpl) UploadFileStream(reader io.Reader, uploadName string) error {
+	client, err := m.getClient()
 	if err != nil {
 		return err
 	}
 
-	err = createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(client)
 	if err != nil {
 		return err
 	}
 
-	_, err = client.PutObject(bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	_, err = client.PutObject(m.bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
 	return err
 }
 
-func UploadFile(filePath string) (string, error) {
-	fileName := uuid.New().String()
-	return UploadFileWithName(filePath, fileName)
-}
-
-func UploadFileWithName(filePath string, uploadName string) (string, error) {
-	client, err := getClient()
+func (m minioServiceImpl) UploadFileWithName(filePath string, uploadName string) (string, error) {
+	client, err := m.getClient()
 	if err != nil {
 		return "", err
 	}
 
-	err = createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(client)
 	if err != nil {
 		return "", nil
 	}
 
-	n, err := client.FPutObject(bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	n, err := client.FPutObject(m.bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: "img/jpeg"})
 	if err != nil {
 		return "", err
 	}
@@ -112,18 +126,18 @@ func UploadFileWithName(filePath string, uploadName string) (string, error) {
 	return uploadName, nil
 }
 
-func createBucketIfNotExists(client *minio.Client) error {
-	bucketExists, err := client.BucketExists(bucketName)
+func (m minioServiceImpl) createBucketIfNotExists(client *minio.Client) error {
+	bucketExists, err := client.BucketExists(m.bucketName)
 	if err != nil {
 		return err
 	}
 
 	if !bucketExists {
-		err := createBucket(client, bucketName)
+		err := createBucket(client, m.bucketName)
 		if err != nil {
 			return err
 		}
-		log.WithField("bucketname", bucketName).Info("successfully created bucket")
+		log.WithField("bucketname", m.bucketName).Info("successfully created bucket")
 	}
 
 	return nil
@@ -133,10 +147,10 @@ func createBucket(client *minio.Client, bucketName string) error {
 	return client.MakeBucket(bucketName, "us-east-1")
 }
 
-func getClient() (*minio.Client, error) {
+func (m minioServiceImpl) getClient() (*minio.Client, error) {
 	return minio.New(
-		minioHost,
-		accessKey,
-		secretKey,
+		m.minioHost,
+		m.accessKey,
+		m.secretKey,
 		NO_SSL)
 }
