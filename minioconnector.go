@@ -13,29 +13,31 @@ type MinioService interface {
 	DownloadFile(objectName string) (string, error)
 	GetObject(objectName string) (*minio.Object, error)
 	UploadFileStream(reader io.Reader, uploadName string) error
-	UploadFile(filePath string) (string, error)
 	UploadFileWithName(filePath string, uploadName string) (string, error)
 }
 
 type minioServiceImpl struct {
-	minioHost  string
-	accessKey  string
-	secretKey  string
-	bucketName string
+	minioHost    string
+	accessKey    string
+	secretKey    string
+	inputBucket  string
+	outputBucket string
 }
 
 func NewMinioService(
 	minioHostArg string,
 	accessKeyArg string,
 	secretKeyArg string,
-	bucketNameArg string) *MinioService {
+	inputBucketArg string,
+	outputBucketArg string) *MinioService {
 
 	var service MinioService
 	service = minioServiceImpl{
-		minioHost:  minioHostArg,
-		accessKey:  accessKeyArg,
-		secretKey:  secretKeyArg,
-		bucketName: bucketNameArg,
+		minioHost:    minioHostArg,
+		accessKey:    accessKeyArg,
+		secretKey:    secretKeyArg,
+		inputBucket:  inputBucketArg,
+		outputBucket: outputBucketArg,
 	}
 	return &service
 }
@@ -52,12 +54,12 @@ func (m minioServiceImpl) DownloadFile(objectName string) (string, error) {
 		return "", err
 	}
 
-	err = m.createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(m.inputBucket, client)
 	if err != nil {
 		return "", err
 	}
 
-	err = client.FGetObject(m.bucketName, objectName, outputFilePath, minio.GetObjectOptions{})
+	err = client.FGetObject(m.inputBucket, objectName, outputFilePath, minio.GetObjectOptions{})
 
 	if err != nil {
 		return "", err
@@ -72,22 +74,17 @@ func (m minioServiceImpl) GetObject(objectName string) (*minio.Object, error) {
 		return nil, err
 	}
 
-	err = m.createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(m.inputBucket, client)
 	if err != nil {
 		return nil, err
 	}
 
-	object, err := client.GetObject(m.bucketName, objectName, minio.GetObjectOptions{})
+	object, err := client.GetObject(m.inputBucket, objectName, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
 
 	return object, nil
-}
-
-func (m minioServiceImpl) UploadFile(filePath string) (string, error) {
-	fileName := uuid.New().String()
-	return m.UploadFileWithName(filePath, fileName)
 }
 
 func (m minioServiceImpl) UploadFileStream(reader io.Reader, uploadName string) error {
@@ -96,54 +93,54 @@ func (m minioServiceImpl) UploadFileStream(reader io.Reader, uploadName string) 
 		return err
 	}
 
-	err = m.createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(m.outputBucket, client)
 	if err != nil {
 		return err
 	}
 
-	_, err = client.PutObject(m.bucketName, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	_, err = client.PutObject(m.outputBucket, uploadName, reader, -1, minio.PutObjectOptions{ContentType: "img/jpeg"})
 	return err
 }
 
-func (m minioServiceImpl) UploadFileWithName(filePath string, uploadName string) (string, error) {
+func (m minioServiceImpl) UploadFileWithName(filePath string, fileName string) (string, error) {
 	client, err := m.getClient()
 	if err != nil {
 		return "", err
 	}
 
-	err = m.createBucketIfNotExists(client)
+	err = m.createBucketIfNotExists(m.outputBucket, client)
 	if err != nil {
 		return "", nil
 	}
 
-	n, err := client.FPutObject(m.bucketName, uploadName, filePath, minio.PutObjectOptions{ContentType: "img/jpeg"})
+	n, err := client.FPutObject(m.outputBucket, fileName, filePath, minio.PutObjectOptions{ContentType: "img/jpeg"})
 	if err != nil {
 		return "", err
 	}
 
-	log.WithField("uploadName", uploadName).Info("Successfully uploaded %s of size %d\n", uploadName, n)
+	log.WithField("fileName", fileName).Info("Successfully uploaded %s of size %d\n", fileName, n)
 
-	return uploadName, nil
+	return fileName, nil
 }
 
-func (m minioServiceImpl) createBucketIfNotExists(client *minio.Client) error {
-	bucketExists, err := client.BucketExists(m.bucketName)
+func (m minioServiceImpl) createBucketIfNotExists(bucketName string, client *minio.Client) error {
+	bucketExists, err := client.BucketExists(bucketName)
 	if err != nil {
 		return err
 	}
 
 	if !bucketExists {
-		err := createBucket(client, m.bucketName)
+		err := createBucket(bucketName, client)
 		if err != nil {
 			return err
 		}
-		log.WithField("bucketname", m.bucketName).Info("successfully created bucket")
+		log.WithField("bucketname", bucketName).Info("successfully created bucket")
 	}
 
 	return nil
 }
 
-func createBucket(client *minio.Client, bucketName string) error {
+func createBucket(bucketName string, client *minio.Client) error {
 	return client.MakeBucket(bucketName, "us-east-1")
 }
 
